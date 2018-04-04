@@ -1,6 +1,6 @@
 setTimeout(function() {
     inject();
-}, 0)
+}, 100)
 
 function ba2hex(bufArray) {
     var uint8arr = new Uint8Array(bufArray);
@@ -91,23 +91,28 @@ function chainAttach(base) {
 
 function inject() {
     var base = Process.findModuleByName("libg.so").base;
+    console.log(base)
 
     var pr_frck = ptr(parseInt(base) + 1 + 0x1629D8)
     var pr_frck_r = ptr(parseInt(base) + 1 + 0x1629E4)
 
-    var pr_strncpm = ptr(parseInt(base) + 0x00041DC0)
-    var pr_socket = ptr(parseInt(base) + 0x00041BF8)
-
-    // kill coc frida detection
     var attached = false;
-    Interceptor.attach(pr_frck, function() {
-        this.context.r0 = 0xFF
-        if (!attached) {
-            attached = true;
-            chainAttach(base);
+    Interceptor.attach(Module.findExportByName('libc.so', "connect"), {
+        onEnter: function (args) {
+            var family = Memory.readU16(args[1]);
+            if (family !== 2) {
+                return
+            }
+            var port = Memory.readU16(args[1].add(2));
+            port = ((port & 0xff) << 8) | (port >> 8);
+            if (port === 27042) {
+                console.log('frida check');
+                Memory.writeU16(args[1].add(2), 0x0101);
+                if (!attached) {
+                    attached = true;
+                    chainAttach(base);
+                }
+            }
         }
-    });
-    Interceptor.attach(pr_frck_r, function() {
-        this.context.r0 = 0x2
     });
 }
